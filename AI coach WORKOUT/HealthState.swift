@@ -12,7 +12,8 @@ final class HealthState {
 
   func requestAuthorization() async {
     do {
-      isAuthorized = try await HealthKitManager.shared.requestAuthorization()
+      try await HealthKitManager.shared.requestAuthorization()
+      isAuthorized = true
     } catch {
       isAuthorized = false
     }
@@ -23,10 +24,10 @@ final class HealthState {
     defer { isRefreshing = false }
 
     do {
-      stepsToday = try await HealthKitManager.shared.fetchStepsToday()
-      activeEnergyToday = try await HealthKitManager.shared.fetchActiveEnergyToday()
-      lastNightSleepHours = try await HealthKitManager.shared.fetchLastNightSleepHours()
-      restingHeartRate = try await HealthKitManager.shared.fetchRestingHeartRate()
+      stepsToday = try await HealthKitManager.shared.stepsToday()
+      activeEnergyToday = try await HealthKitManager.shared.activeEnergyToday()
+      lastNightSleepHours = try await HealthKitManager.shared.lastNightSleepHours()
+      restingHeartRate = try await HealthKitManager.shared.restingHeartRate()
     } catch {
       // Keep previous values if fetching fails
     }

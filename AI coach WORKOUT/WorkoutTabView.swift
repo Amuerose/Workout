@@ -1,7 +1,4 @@
 import SwiftUI
-import WorkoutStore
-import WorkoutModels
-import WorkoutComponents
 
 public struct WorkoutTabView: View {
     @State private var store = WorkoutStore()

@@ -29,7 +29,7 @@ public final class HealthKitManager {
             HKObjectType.quantityType(forIdentifier: .restingHeartRate)!
         ]
         
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             healthStore.requestAuthorization(toShare: nil, read: readTypes) { success, error in
                 if let error = error {
                     continuation.resume(throwing: error)
@@ -82,3 +82,4 @@ public final class HealthKitManager {
         #endif
     }
 }
+

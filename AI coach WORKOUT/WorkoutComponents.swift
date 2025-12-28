@@ -42,7 +42,7 @@ public struct SecondaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor, lineWidth: 1))
-            .foregroundStyle(.accentColor)
+            .foregroundStyle(Color.accentColor)
             .opacity(configuration.isPressed ? 0.85 : 1.0)
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -150,3 +150,4 @@ public struct ExerciseRow: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }
+

@@ -1,10 +1,4 @@
 import Foundation
 
-public struct OpenAIChatMessage: Codable, Equatable {
-    public var role: String
-    public var content: String
-    public init(role: String, content: String) {
-        self.role = role
-        self.content = content
-    }
-}
+// This file intentionally left as a shim to avoid OpenAI type redeclarations.
+// All chat message types are provided by AIStubChatMessage in AIService.swift.

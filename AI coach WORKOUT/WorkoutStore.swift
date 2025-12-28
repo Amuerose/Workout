@@ -18,6 +18,10 @@ public final class WorkoutStore {
     public var elapsedSec: Int = 0
     public var isPaused: Bool = false
 
+    // Reschedule state
+    public var rescheduleDate: Date = Date()
+    public var rescheduleDuration: Int = 20
+
     public init(context: WorkoutContext = .init()) {
         self.context = context
         self.readiness = .init(
@@ -165,4 +169,13 @@ public final class WorkoutStore {
     public func rescheduleSuggestion() -> String {
         "Перенесём на завтра и предложим 5 минут растяжки сегодня."
     }
+
+    public func rescheduleTomorrow() { /* mock reschedule */ }
+    public func rescheduleWorkout(date: Date, duration: Int) { self.rescheduleDate = date; self.rescheduleDuration = duration }
+    public func selectDay(_ day: WeekDay) { /* mock select day */ }
+    public func replaceToday() { /* mock replace */ }
+    public func changeDuration() { /* mock change */ }
+    public func changeIntensity() { /* mock change */ }
+    public func changeStyle() { /* mock change */ }
+    public func replaceExercise(_ item: WorkoutExerciseItem) { /* mock replace item */ }
 }

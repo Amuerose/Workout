@@ -49,6 +49,21 @@ public final class TodayStore {
     public var trend: String = "Сила"
     public var trendUp: Bool = true
 
+    // Dynamic context flags (mock)
+    public var sleepQualityScore: Int = 72
+    public var hrv: Int = 45
+    public var stressHigh: Bool = false
+    public var isRestDay: Bool = false
+    public var cyclePhase: String? = nil // e.g., "PMS", "Ovulation"
+    public var isPregnant: Bool = false
+    public var calendarWorkoutTime: Date? = nil
+    public var hydrationGlasses: Int = 5
+    public var hydrationGoal: Int = 8
+    public var caloriesBurned: Int = 420
+    public var caloriesGoal: Int = 600
+    public var distanceKm: Double = 3.1
+    public var activeMinutes: Int = 18
+
     // Readiness quick choice (1..5)
     public var selfFeeling: Int = 3
 
@@ -101,6 +116,11 @@ public final class TodayStore {
     public func refreshRecommendation() {
         recommendation = Self.generateTodayRecommendation(from: userContext)
     }
+
+    public var isSleepLow: Bool { userContext.sleepHours < 6 }
+    public var isHRVLow: Bool { hrv < 35 }
+    public var isRestRecommended: Bool { isRestDay || isSleepLow || isHRVLow }
+    public var hydrationProgress: Double { Double(hydrationGlasses) / max(1.0, Double(hydrationGoal)) }
 
     // Actions
     public func applyEasierPlan() {
@@ -163,6 +183,12 @@ public final class TodayStore {
     public func increaseIntensityIfReady() {
         if readinessScore() >= 70 { applyHarderPlan() }
     }
+    
+    public func startBreathing() { aiLastResponse = "Запустил дыхательную практику на 2 минуты." }
+    public func startStretching10() { aiLastResponse = "Стартуем растяжку на 10 минут." }
+    public func startWalk10() { aiLastResponse = "Начинаем прогулку на 10 минут." }
+    public func addWaterGlass() { hydrationGlasses = min(hydrationGoal, hydrationGlasses + 1) }
+    public func openPlan() { aiLastResponse = "Открыл план тренировки." }
 
     // AI interactions (mock)
     public func submitAIQuery(_ text: String) {

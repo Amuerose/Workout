@@ -9,6 +9,18 @@ public struct TodayView: View {
         ScrollView {
             VStack(spacing: 16) {
                 heroSection
+
+                // Dynamic modular cards
+                if store.isSleepLow { SleepAdviceCard(store: store) }
+                if store.stressHigh || store.isHRVLow { StressCard(store: store) }
+                if let phase = store.cyclePhase, !phase.isEmpty { CycleCard(store: store) }
+                if store.isPregnant { PregnancyCard(store: store) }
+                ActivitySummaryCard(store: store)
+                HydrationCard(store: store)
+                if store.calendarWorkoutTime != nil { ScheduleCard(store: store) }
+                if store.workoutsIn7Days >= 4 { AchievementCard(store: store) }
+
+                dayStateBanner
                 readinessSection
                 dayPlanSection
                 quickActionsSection
@@ -157,6 +169,8 @@ public struct TodayView: View {
                 HStack(spacing: 8) {
                     Button("Обновить строку от ИИ") { store.refreshAIMessage() }.buttonStyle(SecondaryButtonStyle())
                 }
+                Button("Спросить коуча") { /* Navigate to TodayChatCoachView externally */ }
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
     }
@@ -216,6 +230,50 @@ public struct TodayView: View {
     private func timeLabel(_ t: TimeOfDay) -> String { switch t { case .morning: return "утро"; case .afternoon: return "день"; case .evening: return "вечер" } }
     private func readinessSummary() -> String {
         let r = store.readinessScore(); return r < 40 ? "Сегодня лучше коротко + техника" : (r < 70 ? "Стабильно, можно умеренно" : "Можно нагрузиться")
+    }
+
+    // MARK: - Day State Banner
+    private var dayStateBanner: some View {
+        switch store.dayState {
+        case .completed:
+            return AnyView(
+                GlassCard(title: "Сегодня выполнено", icon: "checkmark.seal.fill") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Отлично! Фокус на восстановлении и мягкой мобилити.").font(.subheadline).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Button("Перед сном") { store.recoveryWorkout() }.buttonStyle(SecondaryButtonStyle())
+                            Button("Следующий шаг") { store.applyHarderPlan() }.buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+                }
+            )
+        case .skipped:
+            return AnyView(
+                GlassCard(title: "Сегодня пропущено", icon: "exclamationmark.triangle.fill") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Ничего страшного — сделай минимум 5 минут и закроем день.").font(.subheadline).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Button("Минимум 5 минут") { store.miniWorkout() }.buttonStyle(PrimaryButtonStyle())
+                            Button("Перенести на позже") { store.rescheduleWorkout() }.buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+                }
+            )
+        case .lateEvening:
+            return AnyView(
+                GlassCard(title: "Поздний вечер", icon: "moon.zzz.fill") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Лучше короткое восстановление вместо полной тренировки.").font(.subheadline).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Button("2 мин дыхания") { store.recoveryWorkout() }.buttonStyle(SecondaryButtonStyle())
+                            Button("Мягкая растяжка") { store.miniWorkout() }.buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+                }
+            )
+        case .normal:
+            return AnyView(EmptyView())
+        }
     }
 }
 
