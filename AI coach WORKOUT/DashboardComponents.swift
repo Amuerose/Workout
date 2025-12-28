@@ -19,7 +19,7 @@ public struct RecommendedWorkoutCard: View {
                     Label(duration, systemImage: "clock").font(.body).foregroundStyle(.white.opacity(0.95))
                     Label(intensity, systemImage: "bolt.fill").font(.body).foregroundStyle(.white.opacity(0.95))
                 }
-                Text("\"\(quote)\"").italic().font(.callout).foregroundStyle(.white.opacity(0.95)).padding(.top, 6)
+                Text("\"\(quote)\"").italic().font(.callout).foregroundStyle(.white.opacity(0.90)).padding(.top, 6)
             }
             .padding(20)
         }
