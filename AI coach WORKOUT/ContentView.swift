@@ -185,7 +185,7 @@ struct ContentView: View {
         Group {
             if auth.isAuthenticated {
                 TabView(selection: $selected) {
-                    TodayView()
+                    TodayViewWrapper()
                     .tabItem { Label("Сегодня", systemImage: "house.fill") }
                     .tag(Tab.today)
 
@@ -379,6 +379,27 @@ private struct TodayScreen: View {
             .padding()
             .navigationTitle("Сегодня")
         }
+    }
+}
+
+struct TodayViewWrapper: View {
+    @AppStorage("ai_mode") private var aiMode: String = "mock"
+    @StateObject private var coachStore = TodayCoachStore()
+    @State private var aiNoticeBanner: String? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let banner = aiNoticeBanner {
+                Text(banner)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(.thinMaterial)
+            }
+            TodayView()
+        }
+        .onAppear { coachStore.bindAIModeBanner($aiNoticeBanner) }
     }
 }
 
@@ -1067,6 +1088,10 @@ struct CoachSettingsView: View {
     @State private var voice: Voice = .none
     @State private var encouragementFreq: Double = 0.5
 
+    // AI Mode
+    // Inserted new Section here as per instruction
+    // 7. Display & Units comes after this
+
     // MARK: - Display & Units
     @State private var darkModeOn: Bool = false
     enum Language: String, CaseIterable, Identifiable { case system = "Системный", ru = "Русский", en = "English", es = "Español"; var id: String { rawValue } }
@@ -1156,14 +1181,16 @@ struct CoachSettingsView: View {
                     Toggle(isOn: $musicPlaybackOn) { Label("Музыка во время тренировок", systemImage: "music.note") }
                 }
 
-                // 6. AI Personalization
-                Section("ИИ персонализация") {
-                    Picker("Тон коуча", selection: $tone) { ForEach(CoachTone.allCases) { t in Text(t.rawValue).tag(t) } }
-                    Picker("Голос", selection: $voice) { ForEach(Voice.allCases) { v in Text(v.rawValue).tag(v) } }
-                    VStack(alignment: .leading) {
-                        Label("Частота поощрений", systemImage: "megaphone.fill")
-                        Slider(value: $encouragementFreq, in: 0...1) { Text("Частота поощрений") } minimumValueLabel: { Text("Редко") } maximumValueLabel: { Text("Часто") }
+                // AI Mode
+                Section("ИИ") {
+                    Picker("Режим", selection: Binding(get: { UserDefaults.standard.string(forKey: "ai_mode") == "live" ? "live" : "mock" }, set: { UserDefaults.standard.set($0, forKey: "ai_mode") })) {
+                        Text("Mock").tag("mock")
+                        Text("Live").tag("live")
                     }
+                    .pickerStyle(.segmented)
+                    Text("Live требует активного биллинга. При ошибке приложение автоматически перейдёт в Mock.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 // 7. Display & Units

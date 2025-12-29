@@ -93,7 +93,6 @@ public final class TodayStore {
             let sorenessScore = (1 - min(max(Double(context.sorenessLevel - 1) / 4.0, 0), 1)) * 20
             return Int((sleepScore + stepsScore + sorenessScore).rounded())
         }()
-        let energy: String = readiness < 40 ? "низкая" : (readiness < 70 ? "средняя" : "высокая")
         let (title, intensity, duration, explanation): (String, String, Int, String)
         if readiness < 40 {
             title = "Лучше легко"; intensity = "лёгкая"; duration = 10; explanation = "Недосып — сделаем щадящую сессию."

@@ -2,34 +2,77 @@ import SwiftUI
 
 public struct TodayView: View {
     @State private var store: TodayStore = TodayStore()
+    @StateObject private var coachStore = TodayCoachStore()
+    @State private var userState = UserState()
 
     public init() {}
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                heroSection
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 16) {
+                    heroSection
 
-                // Dynamic modular cards
-                if store.isSleepLow { SleepAdviceCard(store: store) }
-                if store.stressHigh || store.isHRVLow { StressCard(store: store) }
-                if let phase = store.cyclePhase, !phase.isEmpty { CycleCard(store: store) }
-                if store.isPregnant { PregnancyCard(store: store) }
-                ActivitySummaryCard(store: store)
-                HydrationCard(store: store)
-                if store.calendarWorkoutTime != nil { ScheduleCard(store: store) }
-                if store.workoutsIn7Days >= 4 { AchievementCard(store: store) }
+                    // Dynamic modular cards
+                    if store.isSleepLow { SleepAdviceCard(store: store) }
+                    if store.stressHigh || store.isHRVLow { StressCard(store: store) }
+                    if let phase = store.cyclePhase, !phase.isEmpty { CycleCard(store: store) }
+                    if store.isPregnant { PregnancyCard(store: store) }
+                    ActivitySummaryCard(store: store)
+                    HydrationCard(store: store)
+                    if store.calendarWorkoutTime != nil { ScheduleCard(store: store) }
+                    if store.workoutsIn7Days >= 4 { AchievementCard(store: store) }
 
-                dayStateBanner
-                readinessSection
-                dayPlanSection
-                quickActionsSection
-                aiCoachSection
-                miniProgressSection
+                    dayStateBanner
+                    readinessSection
+                    dayPlanSection
+                    quickActionsSection
+                    aiCoachSection
+                    miniProgressSection
+
+                    // AI Coach dynamic cards feed
+                    GlassCard(title: "Инициативы ИИ", icon: "sparkles") {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: 8) {
+                                    ForEach(coachStore.cards) { card in
+                                        Text(card.text)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(10)
+                                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                            .id(card.id)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .frame(minHeight: 120)
+                            .onChange(of: coachStore.cards.count) { _, _ in
+                                if let last = coachStore.cards.last?.id { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .task { await coachStore.loadToday(userState: userState) }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 24)
+            .safeAreaInset(edge: .bottom) {
+                ResponseBar(store: coachStore, userStateProvider: { userState })
+                    .opacity(coachStore.activeWidget == nil ? 0 : 1)
+                    .animation(.easeInOut, value: coachStore.activeWidget == nil)
+            }
+            .overlay(alignment: .center) {
+                if coachStore.isLoading {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                }
+            }
+            .alert("Ошибка", isPresented: Binding(get: { coachStore.errorMessage != nil }, set: { _ in coachStore.errorMessage = nil })) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(coachStore.errorMessage ?? "")
+            }
         }
     }
 
