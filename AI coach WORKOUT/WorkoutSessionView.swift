@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 public struct WorkoutSessionView: View {
     @Bindable var store: WorkoutStore
@@ -191,3 +192,4 @@ public struct WorkoutSessionView: View {
         #endif
     }
 }
+

@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 // Activity summary card
 public struct ActivitySummaryCard: View {
@@ -149,3 +150,4 @@ public struct HydrationCard: View {
         }
     }
 }
+

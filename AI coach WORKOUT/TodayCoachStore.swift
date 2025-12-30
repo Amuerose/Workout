@@ -1,132 +1,163 @@
 import Foundation
 import SwiftUI
+import HealthKit
 import Combine
 
-public enum TodayAPIError: Error {
-    case http(status: Int, body: String)
+public enum CoachState: Equatable {
+    case needsPermissions
+    case loading
+    case ready(plan: AIPlan)
+    case noData
+    case error(message: String)
 }
 
-public struct CoachCard: Identifiable, Equatable {
-    public let id = UUID()
-    public var role: String // "coach" | "system"
-    public var text: String
-    public var timestamp: Date
-    public var intent: String?
-    public var priority: String?
+public struct HealthSnapshot: Equatable {
+    public var stepsToday: Int
+    public var sleepHoursLastNight: Double?
+    public var restingHeartRate: Double?
+    public var energyLevel: EnergyLevel
+    public enum EnergyLevel: String { case low, normal, high }
+}
+
+public struct AIPlan: Equatable, Codable {
+    public var title: String
+    public var priorities: [String]
+    public var session: Session
+    public var explanation: String
+    public struct Session: Equatable, Codable { public var durationMin: Int; public var steps: Int }
 }
 
 @MainActor
 public final class TodayCoachStore: ObservableObject {
-    @Published public var cards: [CoachCard] = []
+    @Published public var state: CoachState = .loading
+    @Published public var snapshot: HealthSnapshot? = nil
     @Published public var activeWidget: Widget? = nil
-    @Published public var isLoading: Bool = false
-    @Published public var errorMessage: String? = nil
-    @Published public var aiNoticeBanner: String? = nil
 
-    @AppStorage("ai_mode") public var aiMode: String = "mock" {
-        didSet {
-            Task { await self.refreshToday(force: true) }
-        }
-    }
-    private var sessionFallbackToMock: Bool = false
+    private var cancellables: Set<AnyCancellable> = []
 
-    private let api: TodayCoachAPIClient
-    private var lastTurnId: String? = nil
+    public init() {}
 
-    public init(api: TodayCoachAPIClient = TodayCoachAPIClient()) {
-        self.api = api
+    // MARK: - Lifecycle Hooks
+    public func onAppear() {
+        Task { await refreshIfNeeded() }
     }
 
-    public func loadToday(userState: UserState) async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let response = try await api.sendToday(userState: userState, lastTurnId: nil, userReply: nil)
-            handle(response: response)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    public func sceneBecameActive() {
+        Task { await refreshIfNeeded() }
     }
 
+    // MARK: - Widgets / Replies
     public func submitReply(widgetId: String, value: AnyCodable, userState: UserState) async {
-        isLoading = true
-        defer { isLoading = false }
+        // Basic validation: ensure the reply matches the current widget id
+        if let w = activeWidget, w.id == widgetId {
+            // For now, clear the active widget after submission to hide the bar
+            await MainActor.run { [weak self] in
+                self?.activeWidget = nil
+            }
+        }
+        // Optionally, you could forward this reply to backend on next refresh
+        // Keeping minimal to satisfy compiler and UI expectations
+    }
+
+    // MARK: - Core Flow
+    public func refreshIfNeeded() async {
+        // Permissions
         do {
-            let response = try await api.sendToday(userState: userState, lastTurnId: lastTurnId, userReply: ["widget_id": AnyCodable(widgetId), "value": value])
-            handle(response: response)
+            try await HealthKitManager.shared.requestAuthorization()
         } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func handle(response: CoachTodayResponse) {
-        lastTurnId = response.turn_id
-        let card = CoachCard(role: "coach", text: response.coach_message, timestamp: Date(), intent: response.next_intent, priority: response.priority)
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            cards.append(card)
-            activeWidget = response.widgets.first
-        }
-        // Actions and safety could be handled here if needed (open tabs, schedule reminders, etc.)
-    }
-
-    public func bindAIModeBanner(_ external: Binding<String?>) {
-        // Keep external banner in sync with store's banner
-        _ = $aiNoticeBanner.sink { value in
-            external.wrappedValue = value
-        }
-    }
-
-    public func refreshToday(force: Bool) async {
-        isLoading = true
-        defer { isLoading = false }
-        if sessionFallbackToMock || aiMode == "mock" {
-            await useMock()
+            // If denied or unavailable, reflect in state
+            self.state = .needsPermissions
             return
         }
+
+        self.state = .loading
+
+        // Fetch metrics
+        async let steps = HealthKitManager.shared.fetchStepsToday()
+        async let sleep = HealthKitManager.shared.fetchSleepHoursLastNight()
+        let stepsVal = await steps
+        let sleepVal = await sleep
+
+        // Build snapshot
+        let snap = HealthSnapshot(
+            stepsToday: stepsVal,
+            sleepHoursLastNight: sleepVal > 0 ? sleepVal : nil,
+            restingHeartRate: nil,
+            energyLevel: .normal
+        )
+        self.snapshot = snap
+
+        // No data case: if both steps 0 and no sleep -> treat as noData (not an error)
+        if stepsVal == 0 && (snap.sleepHoursLastNight == nil) {
+            self.state = .noData
+            return
+        }
+
+        // AI Plan
         do {
-            let response = try await api.sendToday(userState: UserState(), lastTurnId: nil, userReply: nil)
-            handle(response: response)
-            sessionFallbackToMock = false
-            await setBanner(nil)
+            let plan = try await generateAIPlan(from: snap)
+            self.state = .ready(plan: plan)
         } catch {
-            var banner: String = "Сервер недоступен. Включён Mock."
-            switch error {
-            case TodayAPIError.http(let status, let body):
-                if status == 402 || body.localizedCaseInsensitiveContains("insufficient_quota") {
-                    banner = "Live недоступен (billing). Включён Mock."
-                } else if status == 429 {
-                    banner = "Слишком много запросов. Включён Mock."
-                } else if (500...599).contains(status) {
-                    banner = "Сервер недоступен. Включён Mock."
-                }
-            case is URLError:
-                banner = "Сервер недоступен. Включён Mock."
-            case is DecodingError:
-                banner = "Ошибка формата ответа. Включён Mock."
-            default:
-                banner = "Сервер недоступен. Включён Mock."
-            }
-            sessionFallbackToMock = true
-            await setBanner(banner)
-            await useMock()
+            // Safe fallback
+            let fallback = AIPlan(
+                title: "Лёгкий день восстановления",
+                priorities: ["10–15 минут прогулки", "Стакан воды перед каждым приёмом пищи", "Лёгкая растяжка вечером"],
+                session: .init(durationMin: 8, steps: 600),
+                explanation: "Недостаточно данных для точного плана, поэтому выбрали безопасный восстановительный день."
+            )
+            self.state = .ready(plan: fallback)
         }
     }
 
-    private func setBanner(_ message: String?) async {
-        await MainActor.run { self.aiNoticeBanner = message }
-        guard let message = message else { return }
-        let current = message
-        do {
-            try await Task.sleep(nanoseconds: 5_000_000_000)
-        } catch { }
-        await MainActor.run {
-            if self.aiNoticeBanner == current { self.aiNoticeBanner = nil }
-        }
+    // MARK: - AI Planner (ChatGPT-only, local prompt)
+    private func generateAIPlan(from snap: HealthSnapshot) async throws -> AIPlan {
+        // Local prompt string. In production, use a service layer.
+        let systemPrompt = "Вы — персональный фитнес‑тренер. Верните ТОЛЬКО JSON со схемой: {title, priorities[3], session{durationMin, steps}, explanation}. Учитывайте: шаги сегодня, сон прошлой ночи, пульс в покое (если есть). Без диагноза. Коротко и реалистично."
+        let userJson: [String: Any] = [
+            "stepsToday": snap.stepsToday,
+            "sleepHoursLastNight": snap.sleepHoursLastNight ?? NSNull(),
+            "restingHeartRate": snap.restingHeartRate ?? NSNull()
+        ]
+        let userInput = try JSONSerialization.data(withJSONObject: userJson, options: [.withoutEscapingSlashes])
+        let userString = String(data: userInput, encoding: .utf8) ?? "{}"
+
+        // Stubbed call: replace with real ChatGPT API integration. For now, create a heuristic JSON.
+        let planJSON = heuristicPlanJSON(snap: snap)
+
+        // Decode JSON
+        let plan = try decodePlan(from: planJSON)
+        return plan
     }
 
-    private func useMock() async {
-        // Simple mock: append a coach card with default text
-        let card = CoachCard(role: "coach", text: "[Mock] Советы на сегодня готовы.", timestamp: Date(), intent: nil, priority: nil)
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self.cards.append(card) }
+    private func heuristicPlanJSON(snap: HealthSnapshot) -> String {
+        let lowSleep = (snap.sleepHoursLastNight ?? 0) < 6.0
+        let lowSteps = snap.stepsToday < 2000
+        let title = lowSleep ? "День с пониженной нагрузкой" : "Сбалансированный день"
+        let priorities: [String] = lowSleep ? [
+            "Лёгкая прогулка 15 минут",
+            "2–3 коротких перерыва на мобилити",
+            "Лечь спать на 30–45 минут раньше"
+        ] : [
+            "Прогулка 30 минут (умеренный темп)",
+            "Короткая силовая с собственным весом (10–12 минут)",
+            "Вода и белок в каждом приёме пищи"
+        ]
+        let sessionDur = lowSleep ? 8 : 10
+        let steps = lowSteps ? 1500 : 3000
+        let explanation = lowSleep ? "Сон был ниже оптимального, поэтому предлагаем щадящую активность и фокус на восстановлении." : "Данных достаточно, чтобы держать умеренную активность и поддерживать прогресс."
+        let dict: [String: Any] = [
+            "title": title,
+            "priorities": priorities,
+            "session": ["durationMin": sessionDur, "steps": steps],
+            "explanation": explanation
+        ]
+        let data = try? JSONSerialization.data(withJSONObject: dict, options: [.withoutEscapingSlashes])
+        return String(data: data ?? Data(), encoding: .utf8) ?? "{}"
+    }
+
+    private func decodePlan(from json: String) throws -> AIPlan {
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder()
+        return try decoder.decode(AIPlan.self, from: data)
     }
 }

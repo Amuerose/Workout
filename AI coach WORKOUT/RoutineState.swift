@@ -4,6 +4,13 @@ import Observation
 // Assuming DayPart enum is defined elsewhere in the project:
 // enum DayPart { case morning, afternoon, evening, night }
 
+enum DayPart: String, Codable, CaseIterable {
+    case morning
+    case afternoon
+    case evening
+    case night
+}
+
 @Observable
 final class RoutineState {
     var wakeTime: Date

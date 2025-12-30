@@ -97,7 +97,10 @@ public struct ResponseBar: View {
                     .keyboardType(.decimalPad)
                     .textFieldStyle(.roundedBorder)
                 Button("Готово") {
-                    let val = Double(numberText) ?? 0
+                    var val = Double(numberText) ?? 0
+                    if let min { val = Swift.max(min, val) }
+                    if let max { val = Swift.min(max, val) }
+                    if let step, step > 0 { val = (val / step).rounded() * step }
                     Task {
                         await store.submitReply(widgetId: currentId, value: AnyCodable(val), userState: userStateProvider())
                     }
@@ -115,3 +118,4 @@ public struct ResponseBar: View {
         }
     }
 }
+

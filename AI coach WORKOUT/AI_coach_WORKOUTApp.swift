@@ -11,7 +11,7 @@ import SwiftUI
 struct AI_coach_WORKOUTApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootTabView()
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 // MARK: - Models
 public enum CoachInputKind: Equatable {

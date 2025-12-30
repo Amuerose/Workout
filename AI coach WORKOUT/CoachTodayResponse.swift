@@ -24,10 +24,10 @@ public struct AnyCodable: Codable {
         case let d as Double: try container.encode(d)
         case let s as String: try container.encode(s)
         case let dict as [String: Any]:
-            let enc = try dict.mapValues { v -> AnyCodable in AnyCodable(v) }
+            let enc = dict.mapValues { v -> AnyCodable in AnyCodable(v) }
             try container.encode(enc)
         case let arr as [Any]:
-            let enc = try arr.map { AnyCodable($0) }
+            let enc = arr.map { AnyCodable($0) }
             try container.encode(enc)
         default:
             throw EncodingError.invalidValue(value, .init(codingPath: container.codingPath, debugDescription: "Unsupported AnyCodable type"))
